@@ -9,7 +9,8 @@ defmodule ExMQTT.MixProject do
       description: "An Elixir wrapper for erlang emqtt lib",
       package: package(),
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      dialyzer: dialyzer()
     ]
   end
 
@@ -23,8 +24,9 @@ defmodule ExMQTT.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:emqtt, github: "emqx/emqtt", tag: "v1.1.1"},
-      {:ex_doc, "~> 0.14", only: :dev, runtime: false}
+      {:emqtt, github: "emqx/emqtt", tag: "v1.2.4"},
+      {:ex_doc, "~> 0.24", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -32,6 +34,13 @@ defmodule ExMQTT.MixProject do
     [
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => "https://github.com/ryanwinchester/exmqtt"}
+    ]
+  end
+
+  defp dialyzer do
+    [
+      plt_core_path: "priv/plts",
+      plt_file: {:no_warn, "priv/plts/dialyzer.plt"}
     ]
   end
 end

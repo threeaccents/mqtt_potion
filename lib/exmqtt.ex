@@ -2,64 +2,77 @@ defmodule ExMQTT do
   @moduledoc """
   Documentation for MQTT client.
   """
-  @behaviour ExMQTT.DisconnectHandler
-  @behaviour ExMQTT.MessageHandler
-  @behaviour ExMQTT.PubAckHandler
-  @behaviour ExMQTT.PublishHandler
 
   use GenServer
 
   require Logger
 
+  defmodule Message do
+    @moduledoc """
+    Defines an incomming message
+    """
+
+    @type t :: %__MODULE__{
+            topic: String.t(),
+            payload: String.t(),
+            retain: boolean()
+          }
+    @enforce_keys [:topic, :payload, :retain]
+    defstruct [:topic, :payload, :retain]
+  end
+
   defmodule State do
-    defstruct [:conn_pid, :username, :client_id, :message_handler, :opts, :protocol_version, :reconnect, :subscriptions]
+    defstruct [
+      :conn_pid,
+      :username,
+      :client_id,
+      :handler,
+      :opts,
+      :protocol_version,
+      :reconnect,
+      :subscriptions
+    ]
   end
 
   @type opts :: [
-    {:name, atom}
-    | {:owner, pid}
-    | {:message_handler, module}
-    | {:puback_handler, module}
-    | {:publish_handler, module}
-    | {:disconnect_handler, module}
-    | {:host, binary}
-    | {:hosts, [{binary, :inet.port_number()}]}
-    | {:port, :inet.port_number()}
-    | {:tcp_opts, [:gen_tcp.option()]}
-    | {:ssl, boolean}
-    | {:ssl_opts, [:ssl.ssl_option()]}
-    | {:ws_path, binary}
-    | {:connect_timeout, pos_integer}
-    | {:bridge_mode, boolean}
-    | {:client_id, iodata}
-    | {:clean_start, boolean}
-    | {:username, iodata}
-    | {:password, iodata}
-    | {:protocol_version, 3 | 4 | 5}
-    | {:keepalive, non_neg_integer}
-    | {:max_inflight, pos_integer}
-    | {:retry_interval, timeout}
-    | {:will_topic, iodata}
-    | {:will_payload, iodata}
-    | {:will_retain, boolean}
-    | {:will_qos, pos_integer}
-    | {:will_props, %{atom => term}}
-    | {:auto_ack, boolean}
-    | {:ack_timeout, pos_integer}
-    | {:force_ping, boolean}
-    | {:properties, %{atom => term}}
-    | {:reconnect, {delay :: non_neg_integer, max_delay :: non_neg_integer}}
-    | {:subscriptions, [{topic :: binary, qos :: non_neg_integer}]}
-    | {:start_when, {mfa, retry_in :: non_neg_integer}}
-  ]
+          {:name, atom}
+          | {:owner, pid}
+          | {:handler, module}
+          | {:host, binary}
+          | {:hosts, [{binary, :inet.port_number()}]}
+          | {:port, :inet.port_number()}
+          | {:tcp_opts, [:gen_tcp.option()]}
+          | {:ssl, boolean}
+          | {:ssl_opts, [keyword()]}
+          | {:ws_path, binary}
+          | {:connect_timeout, pos_integer}
+          | {:bridge_mode, boolean}
+          | {:client_id, iodata}
+          | {:clean_start, boolean}
+          | {:username, iodata}
+          | {:password, iodata}
+          | {:protocol_version, 3 | 4 | 5}
+          | {:keepalive, non_neg_integer}
+          | {:max_inflight, pos_integer}
+          | {:retry_interval, timeout}
+          | {:will_topic, iodata}
+          | {:will_payload, iodata}
+          | {:will_retain, boolean}
+          | {:will_qos, pos_integer}
+          | {:will_props, %{atom => term}}
+          | {:auto_ack, boolean}
+          | {:ack_timeout, pos_integer}
+          | {:force_ping, boolean}
+          | {:properties, %{atom => term}}
+          | {:reconnect, {delay :: non_neg_integer, max_delay :: non_neg_integer}}
+          | {:subscriptions, [{topic :: binary, qos :: non_neg_integer}]}
+          | {:start_when, {mfa, retry_in :: non_neg_integer}}
+        ]
 
   @opt_keys [
     :name,
     :owner,
-    :message_handler,
-    :puback_handler,
-    :publish_handler,
-    :disconnect_handler,
+    :handler,
     :host,
     :hosts,
     :port,
@@ -102,36 +115,44 @@ defmodule ExMQTT do
 
   ## Async
 
+  @spec publish(message :: String.t(), topic :: String.t(), qos :: integer()) :: :ok
   def publish(message, topic, qos) do
     GenServer.cast(__MODULE__, {:publish, message, topic, qos})
   end
 
+  @spec subscribe(topic :: String.t(), qos :: integer()) :: :ok
   def subscribe(topic, qos) do
     GenServer.cast(__MODULE__, {:subscribe, topic, qos})
   end
 
+  @spec unsubscribe(topic :: String.t()) :: :ok
   def unsubscribe(topic) do
     GenServer.cast(__MODULE__, {:unsubscribe, topic})
   end
 
+  @spec disconnect() :: :ok
   def disconnect do
     GenServer.cast(__MODULE__, :disconnect)
   end
 
   ## Sync
 
+  @spec publish_sync(message :: String.t(), topic :: String.t(), qos :: integer()) :: :ok
   def publish_sync(message, topic, qos) do
     GenServer.call(__MODULE__, {:publish, message, topic, qos})
   end
 
+  @spec subscribe_sync(topic :: String.t(), qos :: integer()) :: :ok
   def subscribe_sync(topic, qos) do
     GenServer.call(__MODULE__, {:subscribe, topic, qos})
   end
 
+  @spec unsubscribe_sync(topic :: String.t()) :: :ok
   def unsubscribe_sync(topic) do
     GenServer.call(__MODULE__, {:unsubscribe, topic})
   end
 
+  @spec disconnect_sync() :: :ok
   def disconnect_sync do
     GenServer.call(__MODULE__, :disconnect)
   end
@@ -144,29 +165,36 @@ defmodule ExMQTT do
 
   @impl GenServer
   def init(opts) do
+    Process.flag(:trap_exit, true)
+
     opts = take_opts(opts)
-    {{dc_handler, dc_arg}, opts} = Keyword.pop(opts, :disconnect_handler, {__MODULE__, []})
-    {{msg_handler, msg_arg}, opts} = Keyword.pop(opts, :message_handler, {__MODULE__, []})
-    {{puback_handler, puback_arg}, opts} = Keyword.pop(opts, :puback_handler, {__MODULE__, []})
-    {{publish_handler, pub_arg}, opts} = Keyword.pop(opts, :publish_handler, {__MODULE__, []})
-    {{delay, max_delay}, opts} = Keyword.pop(opts, :reconnect, {2000, 60_000})
+    {{delay, max_delay}, opts} = Keyword.pop(opts, :reconnect, {500, 60_000})
     {start_when, opts} = Keyword.pop(opts, :start_when, :now)
     {subscriptions, opts} = Keyword.pop(opts, :subscriptions, [])
 
+    handler = opts[:handler]
+
+    ssl_opts =
+      opts
+      |> Keyword.get(:ssl_opts, {})
+      |> Keyword.put_new(:server_name_indication, String.to_charlist(opts[:host]))
+
+    opts = Keyword.put(opts, :ssl_opts, ssl_opts)
+
     # EMQTT `msg_handler` functions
     handler_functions = %{
-      puback: &apply(puback_handler, :handle_puback, [&1, puback_arg]),
-      publish: &apply(publish_handler, :handle_publish, [&1, pub_arg]),
-      disconnected: &apply(dc_handler, :handle_disconnect, [&1, dc_arg])
+      puback: &handle_puback(&1, handler),
+      publish: &handle_publish(&1, handler),
+      disconnected: &handle_disconnect(&1, handler)
     }
 
     state = %State{
       client_id: opts[:client_id],
-      message_handler: &apply(msg_handler, :handle_message, [&1, &2, msg_arg]),
       protocol_version: opts[:protocol_version],
       reconnect: {delay, max_delay},
       subscriptions: subscriptions,
       username: opts[:username],
+      handler: handler,
       opts: [{:msg_handler, handler_functions} | opts]
     }
 
@@ -198,10 +226,10 @@ defmodule ExMQTT do
         :ok = sub(state, state.subscriptions)
         {:noreply, state}
 
-      {:error, _reason} ->
+      {:error, reason} ->
         %{reconnect: {initial_delay, max_delay}} = state
         delay = retry_delay(initial_delay, max_delay, attempt)
-        Logger.debug("[ExMQTT] Unable to connect, retrying in #{delay} ms")
+        Logger.debug("[ExMQTT] Unable to connect: #{inspect(reason)}, retrying in #{delay} ms")
         :timer.sleep(delay)
         {:noreply, state, {:continue, {:connect, attempt + 1}}}
     end
@@ -281,14 +309,23 @@ defmodule ExMQTT do
 
     case connect(state) do
       {:ok, state} ->
-        Logger.debug("[ExMQTT] Connected #{inspect(state.conn_pid)}")
         {:noreply, state}
 
-      {:error, _reason} ->
+      {:error, reason} ->
         delay = retry_delay(initial_delay, max_delay, attempt)
+        Logger.debug("[ExMQTT] Unable to reconnect: #{inspect(reason)}, retrying in #{delay} ms")
         Process.send_after(self(), {:reconnect, attempt + 1}, delay)
         {:noreply, state}
     end
+  end
+
+  def handle_info({:EXIT, pid, _}, state) do
+    if pid == state.conn_pid do
+      Logger.warn("[ExMQTT] Got Exit")
+      Process.send_after(self(), {:reconnect, 0}, 0)
+    end
+
+    {:noreply, state}
   end
 
   def handle_info(msg, state) do
@@ -298,37 +335,57 @@ defmodule ExMQTT do
 
   ## Disconnect
 
-  @impl ExMQTT.DisconnectHandler
-  def handle_disconnect({reason_code, properties}, _arg) do
-    Logger.warn("[ExMQTT] Disconnect received: reason #{reason_code}, properties: #{inspect(properties)}")
+  def handle_disconnect({reason_code, properties}, handler) do
+    Logger.warn(
+      "[ExMQTT] Disconnect received: reason #{reason_code}, properties: #{inspect(properties)}"
+    )
+
+    if handler != nil do
+      :ok = handler.handle_disconnect(reason_code, properties)
+    end
 
     # Process.send_after(self(), {:reconnect, 0}, 500)
 
     :ok
-  end
-
-  ## Message
-
-  @impl ExMQTT.MessageHandler
-  def handle_message(_topic, _message, _arg) do
-    Logger.warn("[ExMQTT] Message received but no handler module defined")
-    :ok
+  rescue
+    e ->
+      Logger.error("Got error in handle_disconnect: #{inspect(e)}")
+      :ok
   end
 
   ## PubAck
 
-  @impl ExMQTT.PubAckHandler
-  def handle_puback(ack, _arg) do
+  def handle_puback(ack, handler) do
     Logger.debug("[ExMQTT] PUBACK received #{inspect(ack)}")
+
+    if handler != nil do
+      :ok = handler.handle_puback(ack)
+    end
+
     :ok
+  rescue
+    e ->
+      Logger.error("Got error in handle_puback: #{inspect(e)}")
+      :ok
   end
 
   ## Publish
 
-  @impl ExMQTT.PublishHandler
-  def handle_publish(message, _arg) do
+  def handle_publish(message, handler) do
     Logger.debug("[ExMQTT] Publish: #{inspect(message)}")
+    topic = String.split(message.topic, "/")
+
+    message = struct(Message, message)
+
+    if handler != nil do
+      :ok = handler.handle_message(topic, message)
+    end
+
     :ok
+  rescue
+    e ->
+      Logger.error("Got error in handle_publish: #{inspect(e)}")
+      :ok
   end
 
   # ----------------------------------------------------------------------------
@@ -345,13 +402,15 @@ defmodule ExMQTT do
       {:ok, _props} <- :emqtt.connect(conn_pid)
     ) do
       Logger.debug("[ExMQTT] Connected #{inspect(conn_pid)}")
+
+      if state.handler != nil do
+        :ok = state.handler.handle_connect()
+      end
+
       {:ok, %State{state | conn_pid: conn_pid}}
     else
-      {:error, reason} when is_atom(reason) ->
+      {:error, reason} ->
         {:error, reason}
-
-      {:ok, res} ->
-        {:error, res}
     end
   end
 
@@ -405,7 +464,7 @@ defmodule ExMQTT do
   defp take_opts(opts) do
     case Keyword.split(opts, @opt_keys) do
       {keep, []} -> keep
-      {_keep, extra} -> raise ArgumentError, "Unrecognized options #{Enum.join(extra, ", ")}"
+      {_keep, extra} -> raise ArgumentError, "Unrecognized options #{inspect(extra)}"
     end
   end
 
@@ -416,7 +475,7 @@ defmodule ExMQTT do
 
   defp retry_delay(initial_delay, max_delay, attempt) when attempt < 1000 do
     temp = min(max_delay, pow(initial_delay * 2, attempt))
-    temp / 2 + Enum.random([0, temp / 2])
+    trunc(temp / 2 + Enum.random([0, temp / 2]))
   end
 
   defp retry_delay(_initial_delay, max_delay, _attempt) do
