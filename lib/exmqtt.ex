@@ -22,6 +22,7 @@ defmodule ExMQTT do
   end
 
   defmodule State do
+    @moduledoc false
     defstruct [
       :conn_pid,
       :username,

@@ -26,6 +26,7 @@ defmodule ExMQTT.MixProject do
     [
       {:emqtt, github: "emqx/emqtt", tag: "v1.2.4"},
       {:ex_doc, "~> 0.24", only: :dev, runtime: false},
+      {:credo, "~> 1.4", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
     ]
   end
