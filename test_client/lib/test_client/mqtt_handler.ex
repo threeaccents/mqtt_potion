@@ -8,7 +8,7 @@ defmodule TestClient.MQTTHandler do
   end
 
   @impl ExMQTT.Handler
-  def handle_disconnect(_reaon, _properties) do
+  def handle_disconnect(_reason, _properties) do
     IO.puts("got disconnect")
     :ok
   end

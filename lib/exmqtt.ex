@@ -300,11 +300,6 @@ defmodule ExMQTT do
     {:noreply, state}
   end
 
-  def handle_info({:disconnected, :shutdown, :ssl_closed}, state) do
-    Logger.warn("[ExMQTT] Disconnected - shutdown, :ssl_closed")
-    {:noreply, state}
-  end
-
   def handle_info({:reconnect, attempt}, %{reconnect: {initial_delay, max_delay}} = state) do
     Logger.debug("[ExMQTT] Trying to reconnect")
 
@@ -338,14 +333,12 @@ defmodule ExMQTT do
 
   def handle_disconnect({reason_code, properties}, handler) do
     Logger.warn(
-      "[ExMQTT] Disconnect received: reason #{reason_code}, properties: #{inspect(properties)}"
+      "[ExMQTT] Disconnect received: reason #{inspect(reason_code)}, properties: #{inspect(properties)}"
     )
 
     if handler != nil do
       :ok = handler.handle_disconnect(reason_code, properties)
     end
-
-    # Process.send_after(self(), {:reconnect, 0}, 500)
 
     :ok
   rescue
