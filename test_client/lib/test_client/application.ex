@@ -21,6 +21,9 @@ defmodule TestClient.Application do
       client_id: "test_client",
       username: mqtt_user_name,
       password: mqtt_password,
+      tcp_opts: [
+        :inet6
+      ],
       ssl_opts: [
         verify: :verify_peer,
         cacertfile: mqtt_ca_cert_file
