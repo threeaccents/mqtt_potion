@@ -1,7 +1,7 @@
-defmodule ExMQTTTest do
+defmodule MqttPotionTest do
   use ExUnit.Case
 
-  doctest ExMQTT
+  doctest MqttPotion
 
   test "TODO" do
     assert true

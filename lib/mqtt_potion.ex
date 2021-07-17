@@ -1,4 +1,4 @@
-defmodule ExMQTT do
+defmodule MqttPotion do
   @moduledoc """
   Documentation for MQTT client.
   """
@@ -230,7 +230,11 @@ defmodule ExMQTT do
       {:error, reason} ->
         %{reconnect: {initial_delay, max_delay}} = state
         delay = retry_delay(initial_delay, max_delay, attempt)
-        Logger.debug("[ExMQTT] Unable to connect: #{inspect(reason)}, retrying in #{delay} ms")
+
+        Logger.debug(
+          "[MqttPotion] Unable to connect: #{inspect(reason)}, retrying in #{delay} ms"
+        )
+
         :timer.sleep(delay)
         {:noreply, state, {:continue, {:connect, attempt + 1}}}
     end
@@ -291,7 +295,7 @@ defmodule ExMQTT do
   def handle_info({:publish, packet}, state) do
     %{payload: payload, topic: topic} = packet
 
-    Logger.debug("[ExMQTT] Message received for #{topic}")
+    Logger.debug("[MqttPotion] Message received for #{topic}")
 
     if msg_handler = state.handlers[:message] do
       :ok = msg_handler.(String.split(topic, "/"), payload)
@@ -301,7 +305,7 @@ defmodule ExMQTT do
   end
 
   def handle_info({:reconnect, attempt}, %{reconnect: {initial_delay, max_delay}} = state) do
-    Logger.debug("[ExMQTT] Trying to reconnect")
+    Logger.debug("[MqttPotion] Trying to reconnect")
 
     case connect(state) do
       {:ok, state} ->
@@ -309,7 +313,11 @@ defmodule ExMQTT do
 
       {:error, reason} ->
         delay = retry_delay(initial_delay, max_delay, attempt)
-        Logger.debug("[ExMQTT] Unable to reconnect: #{inspect(reason)}, retrying in #{delay} ms")
+
+        Logger.debug(
+          "[MqttPotion] Unable to reconnect: #{inspect(reason)}, retrying in #{delay} ms"
+        )
+
         Process.send_after(self(), {:reconnect, attempt + 1}, delay)
         {:noreply, state}
     end
@@ -317,7 +325,7 @@ defmodule ExMQTT do
 
   def handle_info({:EXIT, pid, _}, state) do
     if pid == state.conn_pid do
-      Logger.warn("[ExMQTT] Got Exit")
+      Logger.warn("[MqttPotion] Got Exit")
       Process.send_after(self(), {:reconnect, 0}, 0)
     end
 
@@ -325,7 +333,7 @@ defmodule ExMQTT do
   end
 
   def handle_info(msg, state) do
-    Logger.warn("[ExMQTT] Unhandled message #{inspect(msg)}")
+    Logger.warn("[MqttPotion] Unhandled message #{inspect(msg)}")
     {:noreply, state}
   end
 
@@ -333,7 +341,7 @@ defmodule ExMQTT do
 
   def handle_disconnect({reason_code, properties}, handler) do
     Logger.warn(
-      "[ExMQTT] Disconnect received: reason #{inspect(reason_code)}, properties: #{inspect(properties)}"
+      "[MqttPotion] Disconnect received: reason #{inspect(reason_code)}, properties: #{inspect(properties)}"
     )
 
     if handler != nil do
@@ -350,7 +358,7 @@ defmodule ExMQTT do
   ## PubAck
 
   def handle_puback(ack, handler) do
-    Logger.debug("[ExMQTT] PUBACK received #{inspect(ack)}")
+    Logger.debug("[MqttPotion] PUBACK received #{inspect(ack)}")
 
     if handler != nil do
       :ok = handler.handle_puback(ack)
@@ -366,7 +374,7 @@ defmodule ExMQTT do
   ## Publish
 
   def handle_publish(message, handler) do
-    Logger.debug("[ExMQTT] Publish: #{inspect(message)}")
+    Logger.debug("[MqttPotion] Publish: #{inspect(message)}")
     topic = String.split(message.topic, "/")
 
     message = struct(Message, message)
@@ -387,7 +395,7 @@ defmodule ExMQTT do
   # ----------------------------------------------------------------------------
 
   defp connect(%State{} = state) do
-    Logger.debug("[ExMQTT] Connecting to #{state.opts[:host]}:#{state.opts[:port]}")
+    Logger.debug("[MqttPotion] Connecting to #{state.opts[:host]}:#{state.opts[:port]}")
 
     opts = map_opts(state.opts)
 
@@ -395,7 +403,7 @@ defmodule ExMQTT do
       {:ok, conn_pid} when is_pid(conn_pid) <- :emqtt.start_link(opts),
       {:ok, _props} <- :emqtt.connect(conn_pid)
     ) do
-      Logger.debug("[ExMQTT] Connected #{inspect(conn_pid)}")
+      Logger.debug("[MqttPotion] Connected #{inspect(conn_pid)}")
 
       if state.handler != nil do
         :ok = state.handler.handle_connect()
@@ -425,12 +433,12 @@ defmodule ExMQTT do
   defp sub(%State{} = state, topic, qos) do
     case :emqtt.subscribe(state.conn_pid, {topic, qos}) do
       {:ok, _props, [reason_code]} when reason_code in [0x00, 0x01, 0x02] ->
-        Logger.debug("[ExMQTT] Subscribed to #{topic} @ QoS #{qos}")
+        Logger.debug("[MqttPotion] Subscribed to #{topic} @ QoS #{qos}")
         :ok
 
       {:ok, _props, reason_codes} ->
         Logger.error(
-          "[ExMQTT] Subscription to #{topic} @ QoS #{qos} failed: #{inspect(reason_codes)}"
+          "[MqttPotion] Subscription to #{topic} @ QoS #{qos} failed: #{inspect(reason_codes)}"
         )
 
         :error
@@ -440,11 +448,11 @@ defmodule ExMQTT do
   defp unsub(%State{} = state, topic) do
     case :emqtt.unsubscribe(state.conn_pid, topic) do
       {:ok, _props, [0x00]} ->
-        Logger.debug("[ExMQTT] Unsubscribed from #{topic}")
+        Logger.debug("[MqttPotion] Unsubscribed from #{topic}")
         :ok
 
       {:ok, _props, reason_codes} ->
-        Logger.error("[ExMQTT] Unsubscribe from #{topic} failed #{inspect(reason_codes)}")
+        Logger.error("[MqttPotion] Unsubscribe from #{topic} failed #{inspect(reason_codes)}")
         :error
     end
   end

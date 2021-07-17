@@ -1,10 +1,10 @@
-defmodule ExMQTT.MixProject do
+defmodule MqttPotion.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :exmqtt,
-      version: "0.1.0",
+      app: :mqtt_potion,
+      version: "0.0.0",
       elixir: "~> 1.9",
       description: "An Elixir wrapper for erlang emqtt lib",
       package: package(),
@@ -34,7 +34,7 @@ defmodule ExMQTT.MixProject do
   defp package do
     [
       licenses: ["Apache-2.0"],
-      links: %{"GitHub" => "https://github.com/ryanwinchester/exmqtt"}
+      links: %{"GitHub" => "https://github.com/brianmay/mqtt_potion"}
     ]
   end
 

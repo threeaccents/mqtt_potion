@@ -35,7 +35,7 @@ defmodule TestClient.Application do
     ]
 
     children = [
-      {ExMQTT, opts}
+      {MqttPotion, opts}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

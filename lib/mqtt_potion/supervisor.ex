@@ -1,4 +1,4 @@
-defmodule ExMQTT.Supervisor do
+defmodule MqttPotion.Supervisor do
   @moduledoc false
   use Supervisor
 
@@ -9,7 +9,7 @@ defmodule ExMQTT.Supervisor do
   def init(opts) do
     {supervision_opts, opts} = Keyword.pop(opts, :supervision, strategy: :one_for_one)
 
-    children = [{ExMQTT, opts}]
+    children = [{MqttPotion, opts}]
 
     Supervisor.init(children, supervision_opts)
   end
