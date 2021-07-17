@@ -14,6 +14,7 @@ defmodule TestClient.Application do
     mqtt_ca_cert_file = Application.get_env(:test_client, :mqtt_ca_cert_file)
 
     opts = [
+      name: TestClient.Mqtt,
       host: mqtt_host,
       port: mqtt_port,
       ssl: true,
