@@ -43,8 +43,7 @@ defmodule MqttPotion do
         ]
 
   @type pub_opts :: list(:emqtt.pubopt())
-  @type sub_opts :: list(:emqtt.subopt())
-  @type subscription :: {topic :: binary, opts :: sub_opts()}
+  @type subscription :: {topic :: binary, qos :: :emqtt.qos()}
 
   defmodule Message do
     @moduledoc """
