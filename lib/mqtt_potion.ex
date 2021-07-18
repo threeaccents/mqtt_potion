@@ -43,7 +43,7 @@ defmodule MqttPotion do
         ]
 
   @type pub_opts :: list(:emqtt.pubopt())
-  @type subscription :: {topic :: binary, qos :: :emqtt.qos()}
+  @type subscription :: {topic :: binary, qos :: 0 | 1 | 2}
 
   defmodule Message do
     @moduledoc """
@@ -278,13 +278,23 @@ defmodule MqttPotion do
   end
 
   def handle_call({:subscribe, subscription}, _from, state) do
-    result = sub(state, subscription)
-    {:reply, result, state}
+    case sub_check(state, subscription) do
+      {:ok, state} ->
+        {:reply, :ok, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
+    end
   end
 
   def handle_call({:unsubscribe, topic}, _from, state) do
-    result = unsub(state, topic)
-    {:reply, result, state}
+    case unsub_check(state, topic) do
+      {:ok, state} ->
+        {:reply, :ok, state}
+
+      {:error, _} = error ->
+        {:reply, error, state}
+    end
   end
 
   def handle_call(:disconnect, _from, state) do
@@ -304,17 +314,25 @@ defmodule MqttPotion do
   end
 
   def handle_cast({:subscribe, subscription}, state) do
-    sub(state, subscription)
-    |> log_error("subscribe error")
+    case sub_check(state, subscription) do
+      {:ok, state} ->
+        {:noreply, state}
 
-    {:noreply, state}
+      {:error, _} = error ->
+        log_error(error, "subscribe error")
+        {:noreply, state}
+    end
   end
 
   def handle_cast({:unsubscribe, topic}, state) do
-    unsub(state, topic)
-    |> log_error("unsubscribe error")
+    case unsub_check(state, topic) do
+      {:ok, state} ->
+        {:noreply, state}
 
-    {:noreply, state}
+      {:error, _} = error ->
+        log_error(error, "unsubscribe error")
+        {:noreply, state}
+    end
   end
 
   def handle_cast(:disconnect, state) do
@@ -490,15 +508,55 @@ defmodule MqttPotion do
     end
   end
 
+  @spec sub_check(state :: State.t(), subscription :: subscription()) ::
+          {:ok, State.t()} | {:error, String.t()}
+  defp sub_check(%State{} = state, {topic, _} = subscription) do
+    old_subscription =
+      state.subscriptions
+      |> Enum.filter(fn {this_topic, _} -> topic == this_topic end)
+      |> List.first()
+
+    if old_subscription == nil do
+      case sub(state, subscription) do
+        :ok ->
+          subscriptions = [subscription | state.subscriptions]
+          state = %State{state | subscriptions: subscriptions}
+          {:ok, state}
+
+        {:error, _} = error ->
+          error
+      end
+    else
+      {:ok, state}
+    end
+  end
+
+  @spec unsub_check(state :: State.t(), topic :: String.t()) ::
+          {:ok, State.t()} | {:error, String.t()}
+  defp unsub_check(%State{} = state, topic) do
+    subscriptions =
+      state.subscriptions
+      |> Enum.reject(fn {this_topic, _} -> topic == this_topic end)
+
+    case unsub(state, topic) do
+      :ok ->
+        state = %State{state | subscriptions: subscriptions}
+        {:ok, state}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
   @spec sub(state :: State.t(), subscription :: subscription()) :: :ok | {:error, String.t()}
-  defp sub(%State{} = state, {topic, opts} = subscription) do
+  defp sub(%State{} = state, {topic, qos} = subscription) do
     case :emqtt.subscribe(state.conn_pid, subscription) do
       {:ok, _props, [reason_code]} when reason_code in [0x00, 0x01, 0x02] ->
-        Logger.debug("[MqttPotion] Subscribed to #{topic} @ #{inspect(opts)}")
+        Logger.debug("[MqttPotion] Subscribed to #{topic} @ #{inspect(qos)}")
         :ok
 
       {:ok, _props, reason_codes} ->
-        msg = "Subscription to #{topic} @ #{inspect(opts)} failed: #{inspect(reason_codes)}"
+        msg = "Subscription to #{topic} @ #{inspect(qos)} failed: #{inspect(reason_codes)}"
         {:error, msg}
     end
   catch
