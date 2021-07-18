@@ -9,9 +9,9 @@ defmodule MqttPotion.Connection do
 
   alias MqttPotion.Message
 
-  @type opts :: MqttPotion.opts
-  @type pub_opts :: MqttPotion.pub_opts
-  @type subscription :: MqttPotion.subscription
+  @type opts :: MqttPotion.opts()
+  @type pub_opts :: MqttPotion.pub_opts()
+  @type subscription :: MqttPotion.subscription()
 
   defmodule State do
     @moduledoc false

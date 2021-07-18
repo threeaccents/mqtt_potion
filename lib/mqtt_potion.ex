@@ -112,5 +112,4 @@ defmodule MqttPotion do
   def disconnect_sync(server) do
     GenServer.call(server, :disconnect)
   end
-
 end
