@@ -599,7 +599,7 @@ defmodule MqttPotion do
   end
 
   defp retry_delay(initial_delay, max_delay, attempt) when attempt < 1000 do
-    temp = min(max_delay, pow(initial_delay * 2, attempt))
+    temp = min(max_delay, initial_delay * pow(2, attempt))
     trunc(temp / 2 + Enum.random([0, temp / 2]))
   end
 
