@@ -35,9 +35,12 @@ def deps do
 end
 ```
 
-**Note:** This is not available in hex, and there are no plans to do so unless
-`emqtt` starts consistently and reliably publishing to hex (they do publish to
-hex but not consistently and reliably).
+**Note:** This is not available in hex, necause the emqtt package is dated.
+See https://github.com/emqx/emqtt/issues/133. Packages that have git
+dependancies cannot be uploaded to hex.
+
+There are no plans to upload packages to hex unless `emqtt` starts consistently
+and reliably publishing to hex.
 
 ## Usage
 
@@ -46,39 +49,42 @@ hex but not consistently and reliably).
 You can use the `GenServer` or the `Supervisor` like so:
 
 ```elixir
-MqttPotion.start_link(opts)
+MqttPotion.Connection.start_link(opts)
 ```
-or 
+You probably just want to add this to your application's supervision tree.
 
-```elixir
-MqttPotion.Supervisor.start_link(opts)
 ```
-
-You probably just want to add either to your application's supervision tree.
+    {MqttPotion, opts}
+```
 
 ### Using the client
 
 ```elixir
-MqttPotion.publish(message, topic, qos)
+:ok = MqttPotion.publish(name, message, topic, opts)
 
-MqttPotion.subscribe(topic, qos)
+:ok = MqttPotion.subscribe({name, qos})
 
-MqttPotion.unsubscribe(topic)
-
-MqttPotion.publish_sync(message, topic, qos)
-
-MqttPotion.subscribe_sync(topic, qos)
-
-MqttPotion.unsubscribe_sync(topic)
+:ok = MqttPotion.unsubscribe(name, topic)
 ```
+
+The async methods will log errors with Logger.error.
+
+```
+:ok = MqttPotion.publish_sync(name, message, topic, opts)
+
+:ok = MqttPotion.subscribe_sync(name, {topic, qos})
+
+:ok = MqttPotion.unsubscribe_sync(name, topic)
+```
+
+The sync methods will return errors as `{:error, reason :: String.t()}`.
 
 ### `opts`
 
 ```elixir
 {:name, atom}
 {:owner, pid}
-{:handler_module, module}
-{:handler_functions, handler_functions}
+{:handler, module}
 {:host, binary}
 {:hosts, [{binary, :inet.port_number()}]}
 {:port, :inet.port_number()}
@@ -113,58 +119,9 @@ MqttPotion.unsubscribe_sync(topic)
 
  * The `opts` are *mostly* the same as [`:emqtt.option()`](https://github.com/emqx/emqtt/blob/783c943f7aa1295b99f4a0c20436978eb6b70053/src/emqtt.erl#L105), but they are different, so use the type defs in this library
  * `opts.ssl_opts` are erlang's [`:ssl.option()`](https://erlang.org/doc/man/ssl.html#type-tls_client_option)
- * `opts.handler_functions` type is defined [here](https://github.com/ryanwinchester/mqtt_potion/blob/b404a86bc3612b23bb32008776de09efa1fee69c/lib/mqtt_potion.ex#L13)
  * `opts.start_when` is for controller the GenServer's `handle_continue/2` callback, so you can add an
  init condition. This is handy for example if you need to wait for the network to be ready before you try to connect to the MQTT broker. The value is a tuple `{start_when, retry_in}` where `start_when` is a `{module, function, arguments}` (MFA) tuple for a function that resolves to a `boolean` which determines when we actually finish `init`, and `retry_in` is the time to sleep (in ms) before we try again.
 
-#### Example `opts` for SSL connection:
+## Example:
 
-```elixir
-[
-  host: "127.0.0.1",
-  port: 8883,
-  protocol_version: 5,
-  ssl: true,
-  client_id: "client-02",
-  username: "user-01",
-  password: "mysecretprivates",
-  clean_start: false,
-  ssl_opts: [
-    cacertfile: '/etc/mqtt/certs/all-ca.crt',
-    keyfile: '/etc/mqtt/certs/client.key',
-    certfile: '/etc/mqtt/certs/client.crt'
-  ],
-  start_when: {{MyProject.Network, :connected?, []}, 2000},
-  handler_module: MyApp.MQTTMessageHandler,
-  subscriptions: [
-    {"foo/#", 1},
-    {"baz/+", 0}
-  ]
-]
-```
-
-
-### Message Handler module
-
-```elixir
-defmodule MyApp.MQTTMessageHandler do
-  @behaviour MqttPotion.Handler
-
-  @impl true
-  def handle_message(["foo", "bar"], message) do
-    # Matches on "foo/bar"
-  end
-
-  def handle_message(["foo", "bar" | _rest], message) do
-    # Matches on "foo/bar/#"
-  end
-
-  def handle_message(["baz", buzz], message) do
-    # Matches on "baz/+"
-  end
-
-  def handle_message(topic, message) do
-    # Catch-all
-  end
-end
-```
+See the test_client directory.

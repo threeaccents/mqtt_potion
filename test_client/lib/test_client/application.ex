@@ -31,12 +31,12 @@ defmodule TestClient.Application do
       ],
       handler: TestClient.MQTTHandler,
       subscriptions: [
-        {"#", 0}
+        {"test/1", 0}
       ]
     ]
 
     children = [
-      {MqttPotion, opts}
+      {MqttPotion.Connection, opts}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
