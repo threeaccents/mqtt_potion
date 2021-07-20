@@ -364,7 +364,7 @@ defmodule MqttPotion.Connection do
       {:ok, conn_pid} when is_pid(conn_pid) <- :emqtt.start_link(opts),
       {:ok, _props} <- :emqtt.connect(conn_pid)
     ) do
-      Logger.debug("[MqttPotion] Connected #{inspect(conn_pid)}")
+      Logger.info("[MqttPotion] Connected #{inspect(conn_pid)}")
       state = %State{state | conn_pid: conn_pid}
 
       sub_list(state, state.subscriptions)
@@ -450,11 +450,11 @@ defmodule MqttPotion.Connection do
   defp sub(%State{} = state, {topic, qos} = subscription) do
     case :emqtt.subscribe(state.conn_pid, subscription) do
       {:ok, _props, [reason_code]} when reason_code in [0x00, 0x01, 0x02] ->
-        Logger.debug("[MqttPotion] Subscribed to #{topic} @ #{inspect(qos)}")
+        Logger.info("[MqttPotion] Subscribed to #{topic} @ qos #{inspect(qos)}")
         :ok
 
       {:ok, _props, reason_codes} ->
-        msg = "Subscription to #{topic} @ #{inspect(qos)} failed: #{inspect(reason_codes)}"
+        msg = "Subscription to #{topic} @ qos #{inspect(qos)} failed: #{inspect(reason_codes)}"
         {:error, msg}
     end
   catch
@@ -465,7 +465,7 @@ defmodule MqttPotion.Connection do
   defp unsub(%State{} = state, topic) do
     case :emqtt.unsubscribe(state.conn_pid, topic) do
       {:ok, _props, [0x00]} ->
-        Logger.debug("[MqttPotion] Unsubscribed from #{topic}")
+        Logger.info("[MqttPotion] Unsubscribed from #{topic}")
         :ok
 
       {:ok, _props, reason_codes} ->
