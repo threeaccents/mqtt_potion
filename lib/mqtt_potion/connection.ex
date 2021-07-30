@@ -180,7 +180,7 @@ defmodule MqttPotion.Connection do
       {:ok, state} ->
         {:reply, :ok, state}
 
-      {:error, _} = error ->
+      {:error, state, _} = error ->
         {:reply, error, state}
     end
   end
@@ -190,7 +190,7 @@ defmodule MqttPotion.Connection do
       {:ok, state} ->
         {:reply, :ok, state}
 
-      {:error, _} = error ->
+      {:error, state, _} = error ->
         {:reply, error, state}
     end
   end
@@ -216,7 +216,7 @@ defmodule MqttPotion.Connection do
       {:ok, state} ->
         {:noreply, state}
 
-      {:error, _} = error ->
+      {:error, state, _} = error ->
         log_error(error, "subscribe error")
         {:noreply, state}
     end
@@ -227,7 +227,7 @@ defmodule MqttPotion.Connection do
       {:ok, state} ->
         {:noreply, state}
 
-      {:error, _} = error ->
+      {:error, state, _} = error ->
         log_error(error, "unsubscribe error")
         {:noreply, state}
     end
@@ -407,22 +407,23 @@ defmodule MqttPotion.Connection do
   end
 
   @spec sub_check(state :: State.t(), subscription :: subscription()) ::
-          {:ok, State.t()} | {:error, String.t()}
+          {:ok, State.t()} | {:error, State.t(), String.t()}
   defp sub_check(%State{} = state, {topic, _} = subscription) do
     old_subscription =
       state.subscriptions
       |> Enum.filter(fn {this_topic, _} -> topic == this_topic end)
       |> List.first()
 
+    subscriptions = [subscription | state.subscriptions]
+    state = %State{state | subscriptions: subscriptions}
+
     if old_subscription == nil do
       case sub(state, subscription) do
         :ok ->
-          subscriptions = [subscription | state.subscriptions]
-          state = %State{state | subscriptions: subscriptions}
           {:ok, state}
 
-        {:error, _} = error ->
-          error
+        {:error, reason} ->
+          {:error, state, reason}
       end
     else
       {:ok, state}
@@ -430,19 +431,20 @@ defmodule MqttPotion.Connection do
   end
 
   @spec unsub_check(state :: State.t(), topic :: String.t()) ::
-          {:ok, State.t()} | {:error, String.t()}
+          {:ok, State.t()} | {:error, State.t(), String.t()}
   defp unsub_check(%State{} = state, topic) do
     subscriptions =
       state.subscriptions
       |> Enum.reject(fn {this_topic, _} -> topic == this_topic end)
 
+    state = %State{state | subscriptions: subscriptions}
+
     case unsub(state, topic) do
       :ok ->
-        state = %State{state | subscriptions: subscriptions}
         {:ok, state}
 
-      {:error, _} = error ->
-        error
+      {:error, reason} ->
+        {:error, state, reason}
     end
   end
 
