@@ -449,14 +449,14 @@ defmodule MqttPotion.Connection do
   end
 
   @spec sub(state :: State.t(), subscription :: subscription()) :: :ok | {:error, String.t()}
-  defp sub(%State{} = state, {topic, qos} = subscription) do
-    case :emqtt.subscribe(state.conn_pid, subscription) do
+  defp sub(%State{} = state, {topic, opts}) do
+    case :emqtt.subscribe(state.conn_pid, topic, opts) do
       {:ok, _props, [reason_code]} when reason_code in [0x00, 0x01, 0x02] ->
-        Logger.info("[MqttPotion] Subscribed to #{topic} @ qos #{inspect(qos)}")
+        Logger.info("[MqttPotion] Subscribed to #{topic} @ opts #{inspect(opts)}")
         :ok
 
       {:ok, _props, reason_codes} ->
-        msg = "Subscription to #{topic} @ qos #{inspect(qos)} failed: #{inspect(reason_codes)}"
+        msg = "Subscription to #{topic} @ opts #{inspect(opts)} failed: #{inspect(reason_codes)}"
         {:error, msg}
     end
   catch
