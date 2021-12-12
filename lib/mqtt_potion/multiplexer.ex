@@ -65,7 +65,7 @@ defmodule MqttPotion.Multiplexer do
   ## Server Callbacks
 
   def init(opts) do
-    mqtt_potion = Keyword.fetch!(opts,:mqtt_potion)
+    mqtt_potion = Keyword.fetch!(opts, :mqtt_potion)
     {:ok, %State{mqtt_potion: mqtt_potion}}
   end
 
